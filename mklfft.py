@@ -106,7 +106,8 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     # Define length, number of transforms strides
     length = _ctypes.c_int(n)
     n_transforms = _ctypes.c_int(np.prod(a.shape)/a.shape[axis])
-    # for strides, the C type used *must* be int64
+
+    # For strides, the C type used *must* be int64
     strides = (_ctypes.c_int64*2)(0, a.strides[axis]/a.itemsize)
     if a.ndim == 2:
         if axis == 0:
@@ -145,10 +146,6 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
             scale = _ctypes.c_double(1./n)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
 
-    #y = _ctypes.c_float(0)
-    #s =  mkl.DftiGetValue(Desc_Handle, DFTI_BACKWARD_SCALE, _ctypes.byref(y))
-    #print s,y
-
     # set all values if necessary
     if a.ndim != 1:
         mkl.DftiSetValue(Desc_Handle, DFTI_NUMBER_OF_TRANSFORMS, n_transforms)
@@ -164,7 +161,7 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     else:
         assert False
 
-    #Not-inplace FFT
+    # Not-in-place FFT
     mkl.DftiSetValue(Desc_Handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE)
 
     mkl.DftiCommitDescriptor(Desc_Handle)
@@ -217,7 +214,7 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     if out is a:
         inplace = True
     elif out is not None:
-        assert out.dtype == np.complex128
+        assert out.dtype == a.dtype
         assert a.shape == out.shape
         assert not np.may_share_memory(a, out)
     else:
@@ -313,7 +310,7 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
     if out is a:
         inplace = True
     elif out is not None:
-        assert out.dtype == np.complex128
+        assert out.dtype == a.dtype
         assert a.shape == out.shape
         assert not np.may_share_memory(a, out)
     else:
@@ -321,16 +318,35 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
     # Create the description handle
     Desc_Handle = _ctypes.c_void_p(0)
-    dims = (_ctypes.c_int*2)(*a.shape)
+    dims = (_ctypes.c_int64*2)(*a.shape)
    
     if a.dtype == np.complex64:
         mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_SINGLE, DFTI_COMPLEX, _ctypes.c_int(2), dims)
     elif a.dtype == np.complex128:
         mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_DOUBLE, DFTI_COMPLEX, _ctypes.c_int(2), dims)
 
+
+    # Set normalization factor
+    if norm == 'ortho':
+        if a.dtype == np.complex64:
+            scale = _ctypes.c_float(1.0/np.sqrt(np.prod(a.shape)))
+        else:
+            scale = _ctypes.c_double(1.0/np.sqrt(np.prod(a.shape)))
+        
+        mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
+        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+    elif norm is None:
+        if a.dtype == np.complex64:
+            scale = _ctypes.c_float(1.0/np.prod(a.shape))
+        else:
+            scale = _ctypes.c_double(1.0/np.prod(a.shape))
+        
+        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+
+
     # Set input strides if necessary
     if not a.flags['C_CONTIGUOUS']:
-        in_strides = (_ctypes.c_int*3)(0, a.strides[0]/16, a.strides[1]/16)
+        in_strides = (_ctypes.c_int*3)(0, a.strides[0]/a.itemsize, a.strides[1]/a.itemsize)
         mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(in_strides))
 
     if direction == 'forward':
@@ -352,7 +368,7 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
         # Set output strides if necessary
         if not out.flags['C_CONTIGUOUS']:
-            out_strides = (_ctypes.c_int*3)(0, out.strides[0]/16, out.strides[1]/16)
+            out_strides = (_ctypes.c_int*3)(0, out.strides[0]/out.itemsize, out.strides[1]/out.itemsize)
             mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
 
         mkl.DftiCommitDescriptor(Desc_Handle)
@@ -388,6 +404,8 @@ if __name__ == "__main__":
     n_iter = 200
     N = 256
 
+    np.seterr(all='raise')
+
     start_time = time.time()
     C = np.zeros((N, N), dtype='complex128')
     for i in range(n_iter):
@@ -399,5 +417,7 @@ if __name__ == "__main__":
     C = np.zeros((N, N), dtype='complex64')
     for i in range(n_iter):
         A = np.complex64(np.random.randn(N, N))
-        C += mkl_fft2(A)
+        C += fft2(A)
     print("--- %s seconds ---" % (time.time() - start_time))
+
+
