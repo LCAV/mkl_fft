@@ -397,6 +397,23 @@ def ifft2(a, norm=None, out=None):
     return mkl_fft2(a, norm=norm, direction='backward', out=out)
 
 
+def cce2full(A):
+
+    # Assume all square for now
+
+    N = A.shape
+    N_half = N[0]//2 + 1
+    out = np.empty((A.shape[0], A.shape[0]), dtype=A.dtype)
+    out[:, :N_half] = A
+
+    out[1:, N_half:] = np.rot90(A[1:, 1:-1], 2).conj()
+
+    # Complete the first row
+    out[0, N_half:] = A[0, -2:0:-1].conj()
+
+    return out
+
+
 def mkl_rfft2(a, norm=None, direction='forward', out=None):
     ''' 
     Forward two-dimensional double-precision complex-complex FFT.
