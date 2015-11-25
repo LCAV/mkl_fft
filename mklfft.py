@@ -171,7 +171,7 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     if out is a:
         inplace = True
     elif out is not None:
-        assert out.dtype == np.complex128
+        assert out.dtype == a.dtype
         assert a.shape == out.shape
         assert not np.may_share_memory(a, out)
     else:
@@ -379,8 +379,7 @@ if __name__ == "__main__":
     C = np.zeros((N, N), dtype='complex64')
     for i in range(n_iter):
         A = np.complex64(np.random.randn(N, N))
-        A = fft2(A, out=A)
-        C += A
+        C += fft2(A)
     print("--- %s seconds ---" % (time.time() - start_time))
 
 
