@@ -66,15 +66,13 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
             a = np.pad(a, pad_width, mode='constant')
         elif a.shape[axis] > m:
             # truncate along axis
-            b = swapaxes(a, axis, 0)[:m,]
-            a = swapaxes(b, 0, axis).copy()
-
+            b = np.swapaxes(a, axis, 0)[:m,]
+            a = np.swapaxes(b, 0, axis).copy()
     elif direction == 'forward':
         n = a.shape[axis]
 
     elif direction == 'backward':
         n = 2*(a.shape[axis]-1)
-
 
     # determine output type
     if direction == 'backward':
