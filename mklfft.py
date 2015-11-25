@@ -359,6 +359,92 @@ def ifft2(a, norm=None, out=None):
     return mkl_fft2(a, norm=norm, direction='backward', out=out)
 
 
+def mkl_rfft2(a, norm=None, direction='forward', out=None):
+    ''' 
+    Forward two-dimensional double-precision complex-complex FFT.
+    Uses the Intel MKL libraries distributed with Enthought Python.
+    Normalisation is different from Numpy!
+    By default, allocates new memory like 'a' for output data.
+    Returns the array containing output data.
+    '''
+
+    assert (a.dtype == np.float32) or (a.dtype == np.float64)
+
+    out_type = np.complex128
+    if a.dtype == np.float32:
+        out_type = np.complex64
+
+    n = a.shape[1]
+
+    # Allocate memory if needed
+    if out is not None:
+        assert out.dtype == out_type
+        assert out.shape[1] == n//2 + 1
+        assert not np.may_share_memory(a, out)
+    else:
+        size = list(a.shape)
+        size[1] = n//2 + 1
+        out = np.empty(size, dtype=out_type)
+
+    # Create the description handle
+    Desc_Handle = _ctypes.c_void_p(0)
+    dims = (_ctypes.c_int64*2)(*a.shape)
+   
+    if a.dtype == np.float32:
+        mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_SINGLE, DFTI_REAL, _ctypes.c_int(2), dims)
+    elif a.dtype == np.float64:
+        mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_DOUBLE, DFTI_REAL, _ctypes.c_int(2), dims)
+
+    # Set the storage type
+    mkl.DftiSetValue(Desc_Handle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX)
+
+    # Set normalization factor
+    if norm == 'ortho':
+        if a.dtype == np.float32:
+            scale = _ctypes.c_float(1.0/np.sqrt(np.prod(a.shape)))
+        else:
+            scale = _ctypes.c_double(1.0/np.sqrt(np.prod(a.shape)))
+        
+        mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
+        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+    elif norm is None:
+        if a.dtype == np.float64:
+            scale = _ctypes.c_float(1.0/np.prod(a.shape))
+        else:
+            scale = _ctypes.c_double(1.0/np.prod(a.shape))
+        
+        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+    
+    # For strides, the C type used *must* be int64
+    in_strides = (_ctypes.c_int64*3)(0, a.strides[0]/a.itemsize, a.strides[1]/a.itemsize)
+    out_strides = (_ctypes.c_int64*3)(0, out.strides[0]/out.itemsize, out.strides[1]/out.itemsize)
+    
+    # mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(in_strides))
+    mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
+
+    if direction == 'forward':
+        fft_func = mkl.DftiComputeForward
+    elif direction == 'backward':
+        fft_func = mkl.DftiComputeBackward
+    else:
+        assert False
+
+    # Not-in-place FFT
+    mkl.DftiSetValue(Desc_Handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE)
+
+    # Set output strides if necessary
+    if not out.flags['C_CONTIGUOUS']:
+        out_strides = (_ctypes.c_int*3)(0, out.strides[0]/out.itemsize, out.strides[1]/out.itemsize)
+        mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
+
+    mkl.DftiCommitDescriptor(Desc_Handle)
+    fft_func(Desc_Handle, a.ctypes.data_as(_ctypes.c_void_p), out.ctypes.data_as(_ctypes.c_void_p) )
+
+    mkl.DftiFreeDescriptor(_ctypes.byref(Desc_Handle))
+
+    return out
+
+
 if __name__ == "__main__":
 
     import time
@@ -368,18 +454,24 @@ if __name__ == "__main__":
 
     np.seterr(all='raise')
 
-    start_time = time.time()
-    C = np.zeros((N, N), dtype='complex128')
-    for i in range(n_iter):
-        A = np.random.randn(N, N)
-        C += np.fft.fft2(A)
-    print("--- %s seconds ---" % (time.time() - start_time))
-
-    start_time = time.time()
+    A = np.complex64(np.random.randn(N, N))
     C = np.zeros((N, N), dtype='complex64')
+    start_time = time.time()
     for i in range(n_iter):
-        A = np.complex64(np.random.randn(N, N))
-        C += fft2(A)
+        C += np.fft.fft(A)
     print("--- %s seconds ---" % (time.time() - start_time))
 
+    A = np.complex64(np.random.randn(N, N))
+    C = np.zeros((N, N), dtype='complex64')
+    start_time = time.time()
+    for i in range(n_iter):
+        C += fft(A)
+    print("--- %s seconds ---" % (time.time() - start_time))
+
+    A = np.float32(np.random.randn(N, N))
+    C = np.zeros((N, N//2+1), dtype='complex64')
+    start_time = time.time()
+    for i in range(n_iter):
+        C += mkl_rfft(A)
+    print("--- %s seconds ---" % (time.time() - start_time))
 
