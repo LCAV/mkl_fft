@@ -31,6 +31,7 @@ def load_libmkl():
 
 mkl = load_libmkl()
 
+
 def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     ''' 
     Forward one-dimensional double-precision real-complex FFT.
@@ -53,7 +54,7 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
         assert a.dtype == np.complex64 or a.dtype == np.complex128
 
     order = 'C'
-    if a.flags['F_CONTIGUOUS']:
+    if a.flags['F_CONTIGUOUS'] and not a.flags['C_CONTIGUOUS']:
         order = 'F'
 
     # Add zero padding or truncate if needed (incurs memory copy)
@@ -66,9 +67,9 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
             a = np.pad(a, pad_width, mode='constant')
         elif a.shape[axis] > m:
             # truncate along axis
-            b = np.np.swapaxes(a, axis, 0)[:m,]
-            a = np.np.np.swapaxes(b, 0, axis).copy()
-    elif direction np.== 'forward':
+            b = np.swapaxes(a, axis, 0)[:m,]
+            a = np.swapaxes(b, 0, axis).copy()
+    elif direction == 'forward':
         n = a.shape[axis]
 
     elif direction == 'backward':
@@ -132,14 +133,14 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     # set normalization factor
     if norm == 'ortho':
         if not double_precision:
-            scale = _ctypes.c_float(1/np.sqrt(n))
+            scale = _ctypes.c_double(1/np.sqrt(n))
         else:
             scale = _ctypes.c_double(1/np.sqrt(n))
         mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     elif norm is None:
         if not double_precision:
-            scale = _ctypes.c_float(1./n)
+            scale = _ctypes.c_double(1./n)
         else:
             scale = _ctypes.c_double(1./n)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
@@ -163,6 +164,7 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     mkl.DftiSetValue(Desc_Handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE)
 
     mkl.DftiCommitDescriptor(Desc_Handle)
+    
     fft_func(Desc_Handle, a.ctypes.data_as(_ctypes.c_void_p), out.ctypes.data_as(_ctypes.c_void_p) )
 
     mkl.DftiFreeDescriptor(_ctypes.byref(Desc_Handle))
@@ -327,7 +329,7 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
     # Set normalization factor
     if norm == 'ortho':
         if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1.0/np.sqrt(np.prod(a.shape)))
+            scale = _ctypes.c_double(1.0/np.sqrt(np.prod(a.shape)))
         else:
             scale = _ctypes.c_double(1.0/np.sqrt(np.prod(a.shape)))
         
@@ -335,7 +337,7 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     elif norm is None:
         if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1.0/np.prod(a.shape))
+            scale = _ctypes.c_double(1.0/np.prod(a.shape))
         else:
             scale = _ctypes.c_double(1.0/np.prod(a.shape))
         
