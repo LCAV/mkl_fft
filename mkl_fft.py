@@ -694,7 +694,7 @@ def rfft2(a, norm=None, out=None):
 
     """
 
-    def mkl_rfft2(a, norm=None, direction='forward', out=None):
+    return mkl_rfft2(a, norm=None, direction='forward', out=None)
 
 
 def irfft2(a, norm=None, out=None):
@@ -722,7 +722,7 @@ def irfft2(a, norm=None, out=None):
 
     """
 
-    def mkl_rfft2(a, norm=None, direction='backward', out=None):
+    return mkl_rfft2(a, norm=None, direction='backward', out=None)
 
 
 if __name__ == "__main__":
