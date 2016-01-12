@@ -1,9 +1,9 @@
-''' 
-Wrapper for the MKL FFT routines.
+""" 
+Wrapper for the MKL FFT routines. This implements very fast FFT on Intel
+processors, much faster than the stock fftpack routines in numpy/scipy.
 
-Inspiration from:
-http://stackoverflow.com/questions/11752898/threaded-fft-in-enthought-python
-'''
+"""
+
 
 import numpy as np
 import ctypes as _ctypes
@@ -12,6 +12,15 @@ import os
 from dftidefs import *
 
 def load_libmkl():
+    r"""Loads the MKL library if it can be found in the library load path.
+
+    Raises
+    ------
+    ValueError
+        If the MKL library cannot be found.
+
+    """
+
     if os.name == 'posix':
         try:
             lib_mkl = os.getenv('LIBMKL')
@@ -33,13 +42,16 @@ mkl = load_libmkl()
 
 
 def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
-    ''' 
-    Forward one-dimensional double-precision real-complex FFT.
-    Uses the Intel MKL libraries distributed with Anaconda Python.
-    Normalisation is different from Numpy!
-    By default, allocates new memory like 'a' for output data.
-    Returns the array containing output data.
-    '''
+    r"""Forward/backward 1D double-precision real-complex FFT.
+
+    For more details:
+
+    See Also
+    --------
+    rfft, irfft
+
+    """
+
 
     if axis == -1:
         axis = a.ndim-1
@@ -173,13 +185,15 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
 
 
 def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
-    ''' 
-    Forward/Backward one-dimensional single/double-precision complex-complex FFT.
-    Uses the Intel MKL libraries distributed with Anaconda Python.
-    Normalisation is different from Numpy!
-    By default, allocates new memory like 'a' for output data.
-    Returns the array containing output data.
-    '''
+    r"""Forward/backward 1D single- or double-precision FFT.
+
+    For more details:
+
+    See Also
+    --------
+    fft, ifft
+
+    """
 
     # This code only works for 1D and 2D arrays
     assert a.ndim < 3
@@ -290,13 +304,15 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
 
 
 def mkl_fft2(a, norm=None, direction='forward', out=None):
-    ''' 
-    Forward two-dimensional double-precision complex-complex FFT.
-    Uses the Intel MKL libraries distributed with Enthought Python.
-    Normalisation is different from Numpy!
-    By default, allocates new memory like 'a' for output data.
-    Returns the array containing output data.
-    '''
+    r"""Forward/backward 1D single- or double-precision FFT.
+
+    For more details:
+
+    See Also
+    --------
+    fft2, ifft2
+
+    """
 
     # convert input to complex data type if real (also memory copy)
     if a.dtype != np.complex128 and a.dtype != np.complex64:
@@ -378,24 +394,6 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
     return out
 
-def rfft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='forward', out=out)
-
-def irfft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='backward', out=out)
-
-def fft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='forward', out=out)
-
-def ifft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='backward', out=out)
-
-def fft2(a, norm=None, out=None):
-    return mkl_fft2(a, norm=norm, direction='forward', out=out)
-
-def ifft2(a, norm=None, out=None):
-    return mkl_fft2(a, norm=norm, direction='backward', out=out)
-
 
 def cce2full(A):
 
@@ -415,13 +413,15 @@ def cce2full(A):
 
 
 def mkl_rfft2(a, norm=None, direction='forward', out=None):
-    ''' 
-    Forward two-dimensional double-precision complex-complex FFT.
-    Uses the Intel MKL libraries distributed with Enthought Python.
-    Normalisation is different from Numpy!
-    By default, allocates new memory like 'a' for output data.
-    Returns the array containing output data.
-    '''
+    r"""Forward/backward single- or double-precision real-complex 2D FFT.
+
+    For more details:
+
+    See Also
+    --------
+    rfft2, irfft2
+
+    """
 
     assert (a.dtype == np.float32) or (a.dtype == np.float64)
 
@@ -498,6 +498,231 @@ def mkl_rfft2(a, norm=None, direction='forward', out=None):
     mkl.DftiFreeDescriptor(_ctypes.byref(Desc_Handle))
 
     return out
+
+
+
+def rfft(a, n=None, axis=-1, norm=None, out=None):
+    r"""Computes the forward real-complex FFT using Intel's MKL routines.
+
+    Faster than mkl_fft.fft for real arrays. 
+
+    Parameters 
+    ----------
+    a : ndarray
+        Input array to transform. It must be real.
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='forward', out=out)
+
+
+def irfft(a, n=None, axis=-1, norm=None, out=None):
+    r"""Computes the inverse complex-real FFT using Intel's MKL routines.
+
+    Faster than mkl_fft.ifft for conjugate-even arrays. 
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform. It should be stored in the conjugate-even
+        format (i.e. like output of rfft).
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='backward', out=out)
+
+
+def fft(a, n=None, axis=-1, norm=None, out=None):
+    r"""Computes the forward FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='forward', out=out)
+
+
+def ifft(a, n=None, axis=-1, norm=None, out=None):
+    r"""Computes the inverse FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='backward', out=out)
+
+
+def fft2(a, norm=None, out=None):
+    r"""Computes the forward 2D FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_fft2(a, norm=norm, direction='forward', out=out)
+
+
+def ifft2(a, norm=None, out=None):
+    r"""Computes the inverse 2D FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_fft2(a, norm=norm, direction='backward', out=out)
+
+
+def rfft2(a, norm=None, out=None):
+    r"""Computes the forward real -> complex conjugate-even 2D FFT using
+    Intel's MKL routines.
+
+    Faster than mkl_fft.fft2 for real arrays.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform. It must be real.
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    def mkl_rfft2(a, norm=None, direction='forward', out=None):
+
+
+def irfft2(a, norm=None, out=None):
+    r"""Computes the forward conjugate-even -> real 2D FFT using Intel's MKL
+    routines.
+
+    Faster than mkl_fft.ifft2 for conjugate-even arrays.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform. It should be stored in the conjugate-even
+        format (i.e. like output of rfft2).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    def mkl_rfft2(a, norm=None, direction='backward', out=None):
 
 
 if __name__ == "__main__":
