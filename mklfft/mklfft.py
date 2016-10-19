@@ -9,7 +9,7 @@ import numpy as np
 import ctypes as _ctypes
 import os
 
-from dftidefs import *
+from .dftidefs import *
 
 def load_libmkl():
     if os.name == 'posix':
@@ -31,7 +31,7 @@ def load_libmkl():
 
 mkl = load_libmkl()
 
-def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
+def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scrambled=False):
     ''' 
     Forward one-dimensional double-precision real-complex FFT.
     Uses the Intel MKL libraries distributed with Anaconda Python.
@@ -58,7 +58,7 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
 
     # Add zero padding or truncate if needed (incurs memory copy)
     if n is not None:
-        m = n if direction == 'forward' else (n//2 + 1)
+        m = n if direction == 'forward' else (n // 2 + 1)
         if a.shape[axis] < m:
             # pad axis with zeros
             pad_width = np.zeros((a.ndim, 2), dtype=np.int)
@@ -90,32 +90,32 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     assert a is not out
     if out is not None:
         assert out.dtype == out_type
-        for i in xrange(a.ndim):
+        for i in range(a.ndim):
             if i != axis:
                 assert a.shape[i] == out.shape[i]
         if direction == 'forward':
-            assert (n//2 + 1) == out.shape[axis]
+            assert (n // 2 + 1) == out.shape[axis]
         else:
             assert out.shape[axis] == n
         assert not np.may_share_memory(a, out)
     else:
         size = list(a.shape)
-        size[axis] = n//2 + 1 if direction == 'forward' else n
+        size[axis] = n // 2 + 1 if direction == 'forward' else n
         out = np.empty(size, dtype=out_type, order=order)
 
     # Define length, number of transforms strides
     length = _ctypes.c_int(n)
-    n_transforms = _ctypes.c_int(np.prod(a.shape)/a.shape[axis])
+    n_transforms = _ctypes.c_int(np.prod(a.shape) // a.shape[axis])
 
     # For strides, the C type used *must* be int64
-    strides = (_ctypes.c_int64*2)(0, a.strides[axis]/a.itemsize)
+    strides = (_ctypes.c_int64*2)(0, a.strides[axis] // a.itemsize)
     if a.ndim == 2:
         if axis == 0:
-            distance = _ctypes.c_int(a.strides[1]/a.itemsize)
-            out_distance = _ctypes.c_int(out.strides[1]/out.itemsize)
+            distance = _ctypes.c_int(a.strides[1] // a.itemsize)
+            out_distance = _ctypes.c_int(out.strides[1] // out.itemsize)
         else:
-            distance = _ctypes.c_int(a.strides[0]/a.itemsize)
-            out_distance = _ctypes.c_int(out.strides[0]/out.itemsize)
+            distance = _ctypes.c_int(a.strides[0] // a.itemsize)
+            out_distance = _ctypes.c_int(out.strides[0] // out.itemsize)
 
     double_precision = True
     if (direction == 'forward' and a.dtype == np.float32) or (direction == 'backward' and a.dtype == np.complex64):
@@ -133,18 +133,12 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
 
     # set normalization factor
     if norm == 'ortho':
-        if not double_precision:
-            scale = _ctypes.c_float(1/np.sqrt(n))
-        else:
-            scale = _ctypes.c_double(1/np.sqrt(n))
+        scale = _ctypes.c_double(1 / np.sqrt(n))
         mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     elif norm is None:
-        if not double_precision:
-            scale = _ctypes.c_float(1./n)
-        else:
-            scale = _ctypes.c_double(1./n)
-        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+        scale = _ctypes.c_double(1. / n)
+        s = mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
 
     # set all values if necessary
     if a.ndim != 1:
@@ -153,6 +147,9 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
         mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_DISTANCE, out_distance)
         mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(strides))
         mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(strides))
+
+    if scrambled:
+        s = mkl.DftiSetValue(Desc_Handle, DFTI_ORDERING, DFTI_BACKWARD_SCRAMBLED)
 
     if direction == 'forward':
         fft_func = mkl.DftiComputeForward
@@ -172,7 +169,7 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
     return out
 
 
-def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
+def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scrambled=False):
     ''' 
     Forward/Backward one-dimensional single/double-precision complex-complex FFT.
     Uses the Intel MKL libraries distributed with Anaconda Python.
@@ -222,15 +219,15 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
 
     # Define length, number of transforms strides
     length = _ctypes.c_int(a.shape[axis])
-    n_transforms = _ctypes.c_int(np.prod(a.shape)/a.shape[axis])
+    n_transforms = _ctypes.c_int(np.prod(a.shape) // a.shape[axis])
     
     # For strides, the C type used *must* be int64
-    strides = (_ctypes.c_int64*2)(0, a.strides[axis]/a.itemsize)
+    strides = (_ctypes.c_int64*2)(0, a.strides[axis] // a.itemsize)
     if a.ndim == 2:
         if axis == 0:
-            distance = _ctypes.c_int(a.strides[1]/a.itemsize)
+            distance = _ctypes.c_int(a.strides[1] // a.itemsize)
         else:
-            distance = _ctypes.c_int(a.strides[0]/a.itemsize)
+            distance = _ctypes.c_int(a.strides[0] // a.itemsize)
 
     # Create the description handle
     Desc_Handle = _ctypes.c_void_p(0)
@@ -241,19 +238,11 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
 
     # Set normalization factor
     if norm == 'ortho':
-        if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1/np.sqrt(a.shape[axis]))
-        else:
-            scale = _ctypes.c_double(1/np.sqrt(a.shape[axis]))
-        
+        scale = _ctypes.c_double(1. / np.sqrt(a.shape[axis]))
         mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     elif norm is None:
-        if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1./a.shape[axis])
-        else:
-            scale = _ctypes.c_double(1./a.shape[axis])
-        
+        scale = _ctypes.c_double(1. / a.shape[axis])
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
 
     # set all values if necessary
@@ -263,6 +252,10 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None):
         mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_DISTANCE, distance)
         mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(strides))
         mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(strides))
+
+    if scrambled:
+        s = mkl.DftiSetValue(Desc_Handle, DFTI_ORDERING, DFTI_BACKWARD_SCRAMBLED)
+        DftiErrorMessage(s)
 
     if direction == 'forward':
         fft_func = mkl.DftiComputeForward
@@ -329,24 +322,24 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
     # Set normalization factor
     if norm == 'ortho':
         if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1.0/np.sqrt(np.prod(a.shape)))
+            scale = _ctypes.c_float(1.0 / np.sqrt(np.prod(a.shape)))
         else:
-            scale = _ctypes.c_double(1.0/np.sqrt(np.prod(a.shape)))
+            scale = _ctypes.c_double(1.0 / np.sqrt(np.prod(a.shape)))
         
         mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     elif norm is None:
         if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1.0/np.prod(a.shape))
+            scale = _ctypes.c_float(1.0 / np.prod(a.shape))
         else:
-            scale = _ctypes.c_double(1.0/np.prod(a.shape))
+            scale = _ctypes.c_double(1.0 / np.prod(a.shape))
         
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
 
 
     # Set input strides if necessary
     if not a.flags['C_CONTIGUOUS']:
-        in_strides = (_ctypes.c_int*3)(0, a.strides[0]/a.itemsize, a.strides[1]/a.itemsize)
+        in_strides = (_ctypes.c_int*3)(0, a.strides[0] // a.itemsize, a.strides[1] // a.itemsize)
         mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(in_strides))
 
     if direction == 'forward':
@@ -368,7 +361,7 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
         # Set output strides if necessary
         if not out.flags['C_CONTIGUOUS']:
-            out_strides = (_ctypes.c_int*3)(0, out.strides[0]/out.itemsize, out.strides[1]/out.itemsize)
+            out_strides = (_ctypes.c_int*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
             mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
 
         mkl.DftiCommitDescriptor(Desc_Handle)
@@ -378,17 +371,17 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
     return out
 
-def rfft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='forward', out=out)
+def rfft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='forward', out=out, scrambled=scrambled)
 
-def irfft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='backward', out=out)
+def irfft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='backward', out=out, scrambled=scrambled)
 
-def fft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='forward', out=out)
+def fft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='forward', out=out, scrambled=scrambled)
 
-def ifft(a, n=None, axis=-1, norm=None, out=None):
-    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='backward', out=out)
+def ifft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    return mkl_fft(a, n=n, axis=axis, norm=norm, direction='backward', out=out, scrambled=scrambled)
 
 def fft2(a, norm=None, out=None):
     return mkl_fft2(a, norm=norm, direction='forward', out=out)

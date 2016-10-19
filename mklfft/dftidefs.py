@@ -63,3 +63,42 @@ DFTI_CCS_FORMAT             = _ctypes.c_int(54) # ccs format for real DFT
 DFTI_PACK_FORMAT            = _ctypes.c_int(55) # pack format for real DFT 
 DFTI_PERM_FORMAT            = _ctypes.c_int(56) # perm format for real DFT 
 DFTI_CCE_FORMAT             = _ctypes.c_int(57) # cce format for real DFT 
+
+# and not scrambled:
+
+# error values:
+DFTI_NO_ERROR                    = _ctypes.c_int(0)
+DFTI_MEMORY_ERROR                = _ctypes.c_int(1)
+DFTI_INVALID_CONFIGURATION       = _ctypes.c_int(2)
+DFTI_INCONSISTENT_CONFIGURATION  = _ctypes.c_int(3)
+DFTI_MULTITHREADED_ERROR         = _ctypes.c_int(4)
+DFTI_BAD_DESCRIPTOR              = _ctypes.c_int(5)
+DFTI_UNIMPLEMENTED               = _ctypes.c_int(6)
+DFTI_MKL_INTERNAL_ERROR          = _ctypes.c_int(7)
+DFTI_NUMBER_OF_THREADS_ERROR     = _ctypes.c_int(8)
+DFTI_1D_LENGTH_EXCEEDS_INT32     = _ctypes.c_int(9)
+
+def DftiErrorMessage(e):
+    if e == DFTI_NO_ERROR.value:
+        pass
+    elif e == DFTI_MEMORY_ERROR.value:
+        print("DFTI Error : Memory error")
+    elif e == DFTI_INVALID_CONFIGURATION.value:
+        print("DFTI Error : Invalid configuration")
+    elif e == DFTI_INCONSISTENT_CONFIGURATION.value:
+        print("DFTI Error : Inconsistent configuration")
+    elif e == DFTI_MULTITHREADED_ERROR.value:
+        print("DFTI Error : Multithreaded error")
+    elif e == DFTI_BAD_DESCRIPTOR.value:
+        print("DFTI Error : Bad descriptor")
+    elif e == DFTI_UNIMPLEMENTED.value:
+        print("DFTI Error : Unimplemented")
+    elif e == DFTI_MKL_INTERNAL_ERROR.value:
+        print("DFTI Error : MKL internal error")
+    elif e == DFTI_NUMBER_OF_THREADS_ERROR.value:
+        print("DFTI Error : Number of threads error")
+    elif e == DFTI_1D_LENGTH_EXCEEDS_INT32.value:
+        print("DFTI Error : 1D length exceeds int32")
+    else:
+        print("Unknown error code")
+
