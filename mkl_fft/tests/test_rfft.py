@@ -2,7 +2,7 @@ from __future__ import division
 import time
 import numpy as np
 #import mklfft as fft
-from mklfft import rfft, irfft
+from mkl_fft import rfft, irfft
 
 from unittest import TestCase
 

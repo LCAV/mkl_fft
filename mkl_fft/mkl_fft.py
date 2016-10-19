@@ -1,9 +1,8 @@
-''' 
-Wrapper for the MKL FFT routines.
+""" 
+Wrapper for the MKL FFT routines. This implements very fast FFT on Intel
+processors, much faster than the stock fftpack routines in numpy/scipy.
 
-Inspiration from:
-http://stackoverflow.com/questions/11752898/threaded-fft-in-enthought-python
-'''
+"""
 
 import numpy as np
 import ctypes as _ctypes
@@ -12,6 +11,15 @@ import os
 from .dftidefs import *
 
 def load_libmkl():
+    r"""Loads the MKL library if it can be found in the library load path.
+
+    Raises
+    ------
+    ValueError
+        If the MKL library cannot be found.
+
+    """
+
     if os.name == 'posix':
         try:
             lib_mkl = os.getenv('LIBMKL')
@@ -32,13 +40,18 @@ def load_libmkl():
 mkl = load_libmkl()
 
 def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scrambled=False):
-    ''' 
-    Forward one-dimensional double-precision real-complex FFT.
+    r"""Forward/backward 1D double-precision real-complex FFT.
+
     Uses the Intel MKL libraries distributed with Anaconda Python.
     Normalisation is different from Numpy!
     By default, allocates new memory like 'a' for output data.
     Returns the array containing output data.
-    '''
+
+    See Also
+    --------
+    rfft, irfft
+
+    """
 
     if axis == -1:
         axis = a.ndim-1
@@ -53,7 +66,7 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scram
         assert a.dtype == np.complex64 or a.dtype == np.complex128
 
     order = 'C'
-    if a.flags['F_CONTIGUOUS']:
+    if a.flags['F_CONTIGUOUS'] and not a.flags['C_CONTIGUOUS']:
         order = 'F'
 
     # Add zero padding or truncate if needed (incurs memory copy)
@@ -66,8 +79,8 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scram
             a = np.pad(a, pad_width, mode='constant')
         elif a.shape[axis] > m:
             # truncate along axis
-            b = swapaxes(a, axis, 0)[:m,]
-            a = swapaxes(b, 0, axis).copy()
+            b = np.swapaxes(a, axis, 0)[:m,]
+            a = np.swapaxes(b, 0, axis).copy()
 
     elif direction == 'forward':
         n = a.shape[axis]
@@ -170,13 +183,18 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scram
 
 
 def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scrambled=False):
-    ''' 
-    Forward/Backward one-dimensional single/double-precision complex-complex FFT.
+    r"""Forward/backward 1D single- or double-precision FFT.
+
     Uses the Intel MKL libraries distributed with Anaconda Python.
     Normalisation is different from Numpy!
     By default, allocates new memory like 'a' for output data.
     Returns the array containing output data.
-    '''
+
+    See Also
+    --------
+    fft, ifft
+
+    """
 
     # This code only works for 1D and 2D arrays
     assert a.ndim < 3
@@ -196,8 +214,8 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scramb
             a = np.pad(x, pad_width, mode='constant')
         elif a.shape[axis] > n:
             # truncate along axis
-            b = swapaxes(a, axis, 0)[:m,]
-            a = swapaxes(b, 0, axis).copy()
+            b = np.swapaxes(a, axis, 0)[:m,]
+            a = np.swapaxes(b, 0, axis).copy()
 
     # Convert input to complex data type if real (also memory copy)
     if a.dtype != np.complex128 and a.dtype != np.complex64:
@@ -238,11 +256,17 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scramb
 
     # Set normalization factor
     if norm == 'ortho':
-        scale = _ctypes.c_double(1. / np.sqrt(a.shape[axis]))
+        if a.dtype == np.complex64:
+            scale = _ctypes.c_float(1 / np.sqrt(a.shape[axis]))
+        else:
+            scale = _ctypes.c_double(1 / np.sqrt(a.shape[axis]))
         mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     elif norm is None:
-        scale = _ctypes.c_double(1. / a.shape[axis])
+        if a.dtype == np.complex64:
+            scale = _ctypes.c_float(1. / a.shape[axis])
+        else:
+            scale = _ctypes.c_double(1. / a.shape[axis])
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
 
     # set all values if necessary
@@ -283,13 +307,18 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scramb
 
 
 def mkl_fft2(a, norm=None, direction='forward', out=None):
-    ''' 
-    Forward two-dimensional double-precision complex-complex FFT.
+    r"""Forward/backward 2D single- or double-precision FFT.
+
     Uses the Intel MKL libraries distributed with Enthought Python.
     Normalisation is different from Numpy!
     By default, allocates new memory like 'a' for output data.
     Returns the array containing output data.
-    '''
+
+    See Also
+    --------
+    fft2, ifft2
+
+    """
 
     # convert input to complex data type if real (also memory copy)
     if a.dtype != np.complex128 and a.dtype != np.complex64:
@@ -371,23 +400,334 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
     return out
 
+def cce2full(A):
+
+    # Assume all square for now
+
+    N = A.shape
+    N_half = N[0]//2 + 1
+    out = np.empty((A.shape[0], A.shape[0]), dtype=A.dtype)
+    out[:, :N_half] = A
+
+    out[1:, N_half:] = np.rot90(A[1:, 1:-1], 2).conj()
+
+    # Complete the first row
+    out[0, N_half:] = A[0, -2:0:-1].conj()
+
+    return out
+
+def mkl_rfft2(a, norm=None, direction='forward', out=None):
+    r"""Forward/backward single- or double-precision real-complex 2D FFT.
+
+    For more details:
+
+    See Also
+    --------
+    rfft2, irfft2
+
+    """
+
+    assert (a.dtype == np.float32) or (a.dtype == np.float64)
+
+    out_type = np.complex128
+    if a.dtype == np.float32:
+        out_type = np.complex64
+
+    n = a.shape[1]
+
+    # Allocate memory if needed
+    if out is not None:
+        assert out.dtype == out_type
+        assert out.shape[1] == n // 2 + 1
+        assert not np.may_share_memory(a, out)
+    else:
+        size = list(a.shape)
+        size[1] = n // 2 + 1
+        out = np.empty(size, dtype=out_type)
+
+    # Create the description handle
+    Desc_Handle = _ctypes.c_void_p(0)
+    dims = (_ctypes.c_int64*2)(*a.shape)
+   
+    if a.dtype == np.float32:
+        mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_SINGLE, DFTI_REAL, _ctypes.c_int(2), dims)
+    elif a.dtype == np.float64:
+        mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_DOUBLE, DFTI_REAL, _ctypes.c_int(2), dims)
+
+    # Set the storage type
+    mkl.DftiSetValue(Desc_Handle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX)
+
+    # Set normalization factor
+    if norm == 'ortho':
+        if a.dtype == np.float32:
+            scale = _ctypes.c_float(1.0 / np.sqrt(np.prod(a.shape)))
+        else:
+            scale = _ctypes.c_double(1.0 / np.sqrt(np.prod(a.shape)))
+        
+        mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
+        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+    elif norm is None:
+        if a.dtype == np.float64:
+            scale = _ctypes.c_float(1.0 / np.prod(a.shape))
+        else:
+            scale = _ctypes.c_double(1.0 / np.prod(a.shape))
+        
+        mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+    
+    # For strides, the C type used *must* be int64
+    in_strides = (_ctypes.c_int64*3)(0, a.strides[0] // a.itemsize, a.strides[1] // a.itemsize)
+    out_strides = (_ctypes.c_int64*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
+    
+    # mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(in_strides))
+    mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
+
+    if direction == 'forward':
+        fft_func = mkl.DftiComputeForward
+    elif direction == 'backward':
+        fft_func = mkl.DftiComputeBackward
+    else:
+        assert False
+
+    # Not-in-place FFT
+    mkl.DftiSetValue(Desc_Handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE)
+
+    # Set output strides if necessary
+    if not out.flags['C_CONTIGUOUS']:
+        out_strides = (_ctypes.c_int*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
+        mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
+
+    mkl.DftiCommitDescriptor(Desc_Handle)
+    fft_func(Desc_Handle, a.ctypes.data_as(_ctypes.c_void_p), out.ctypes.data_as(_ctypes.c_void_p) )
+
+    mkl.DftiFreeDescriptor(_ctypes.byref(Desc_Handle))
+
+    return out
+
+
 def rfft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    r"""Computes the forward real-complex FFT using Intel's MKL routines.
+
+    Faster than mkl_fft.fft for real arrays. 
+
+    Parameters 
+    ----------
+    a : ndarray
+        Input array to transform. It must be real.
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+    scrambled: bool, optional (default False)
+        Allows the output of the FFT to be out of order if set to true. This
+        can sometimes lead to better performance.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
     return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='forward', out=out, scrambled=scrambled)
 
 def irfft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    r"""Computes the inverse complex-real FFT using Intel's MKL routines.
+
+    Faster than mkl_fft.ifft for conjugate-even arrays. 
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform. It should be stored in the conjugate-even
+        format (i.e. like output of rfft).
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+    scrambled: bool, optional (default False)
+        Allows the input of the iFFT to be out of order if set to true. This
+        can sometimes lead to better performance.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
     return mkl_rfft(a, n=n, axis=axis, norm=norm, direction='backward', out=out, scrambled=scrambled)
 
 def fft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    r"""Computes the forward FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+    scrambled: bool, optional (default False)
+        Allows the output of the FFT to be out of order if set to true. This
+        can sometimes lead to better performance.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
     return mkl_fft(a, n=n, axis=axis, norm=norm, direction='forward', out=out, scrambled=scrambled)
 
 def ifft(a, n=None, axis=-1, norm=None, out=None, scrambled=False):
+    r"""Computes the inverse FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    n : int
+        Size of the transform.
+    axis : int
+        Axis along which the transform is computed (default is -1, summation
+        over the last axis).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+    scrambled: bool, optional (default False)
+        Allows the input of the iFFT to be out of order if set to true. This
+        can sometimes lead to better performance.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
     return mkl_fft(a, n=n, axis=axis, norm=norm, direction='backward', out=out, scrambled=scrambled)
 
 def fft2(a, norm=None, out=None):
+    r"""Computes the forward 2D FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
     return mkl_fft2(a, norm=norm, direction='forward', out=out)
 
 def ifft2(a, norm=None, out=None):
+    r"""Computes the inverse 2D FFT using Intel's MKL routines.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform.
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
     return mkl_fft2(a, norm=norm, direction='backward', out=out)
+
+
+def rfft2(a, norm=None, out=None):
+    r"""Computes the forward real -> complex conjugate-even 2D FFT using
+    Intel's MKL routines.
+
+    Faster than mkl_fft.fft2 for real arrays.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform. It must be real.
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_rfft2(a, norm=None, direction='forward', out=None)
+
+
+def irfft2(a, norm=None, out=None):
+    r"""Computes the forward conjugate-even -> real 2D FFT using Intel's MKL
+    routines.
+
+    Faster than mkl_fft.ifft2 for conjugate-even arrays.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array to transform. It should be stored in the conjugate-even
+        format (i.e. like output of rfft2).
+    norm : {None, 'ortho'}
+        Normalization of the transform. None (default) is same as numpy;
+        'ortho' gives an orthogonal (norm-preserving) transform.
+    out : ndarray
+        Points to the output array. Used when the array is preallocated or an
+        in-place transform is desired. Default is None, meaning that the
+        memory is allocated for the output array of the same shape as a.
+
+    Returns
+    -------
+        The transformed output array.
+
+    """
+
+    return mkl_rfft2(a, norm=None, direction='backward', out=None)
 
 
 if __name__ == "__main__":
@@ -399,18 +739,30 @@ if __name__ == "__main__":
 
     np.seterr(all='raise')
 
-    start_time = time.time()
-    C = np.zeros((N, N), dtype='complex128')
-    for i in range(n_iter):
-        A = np.random.randn(N, N)
-        C += np.fft.fft2(A)
-    print("--- %s seconds ---" % (time.time() - start_time))
+    algos = {
+            'Numpy fft2 complex128': {'transform': np.fft.fft2, 'dtype': np.complex128},
+            'MKL fft2 complex128': {'transform': fft2, 'dtype': np.complex128},
+            'Numpy fft2 complex64': {'transform': np.fft.fft2, 'dtype': np.complex64},
+            'MKL fft2 complex64': {'transform': fft2, 'dtype': np.complex64},
+            'Numpy fft complex128': {'transform': np.fft.fft, 'dtype': np.complex128},
+            'MKL fft complex128': {'transform': fft, 'dtype': np.complex128},
+            'Numpy fft complex64': {'transform': np.fft.fft, 'dtype': np.complex64},
+            'MKL fft complex64': {'transform': fft, 'dtype': np.complex64},
+            'Numpy rfft float64': {'transform': np.fft.rfft, 'dtype': np.float64},
+            'MKL rfft float64': {'transform': rfft, 'dtype': np.float64},
+            'Numpy rfft float32': {'transform': np.fft.rfft, 'dtype': np.float32},
+            'MKL rfft float32': {'transform': rfft, 'dtype': np.float32},
+            }
 
-    start_time = time.time()
-    C = np.zeros((N, N), dtype='complex64')
-    for i in range(n_iter):
-        A = np.complex64(np.random.randn(N, N))
-        C += fft2(A)
-    print("--- %s seconds ---" % (time.time() - start_time))
+    for algo in algos.keys():
+
+        A = algos[algo]['dtype'](np.random.randn(N, N))
+        #C = np.zeros((N, N), dtype='complex128')
+        start_time = time.time()
+        for i in range(n_iter):
+            algos[algo]['transform'](A)
+        total = time.time() - start_time
+        print(algo,":")
+        print("--- %s seconds ---" % total)
 
 
