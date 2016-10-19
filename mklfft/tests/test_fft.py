@@ -1,6 +1,7 @@
 from __future__ import division
 import time
 import numpy as np
+
 from mklfft import fft, ifft
 
 from unittest import TestCase

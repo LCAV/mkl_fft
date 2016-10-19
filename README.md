@@ -4,7 +4,7 @@ This is a wrapper around the Intel Math Kernel Library FFT. It is very fast.
 
 ### Authors
 
-* Ivan Dokmanic
+* Ivan Dokmanić
 * Robin Scheibler
 
 ### Setup the library
@@ -29,9 +29,19 @@ It supports
 * 2D FFT
 * Real or complex data
 
+### Test
+
+There are unit tests for `fft`, `ifft`, `rfft`, and `irfft`.
+
+    nosetests
+
+There is also a speed test
+
+    python ./mklfft/tests/test_speed.py
+
 ### License
 
-    Copyright (c) 2016 Ivan Dokmanic, Robin Scheibler
+    Copyright (c) 2016 Ivan Dokmanić, Robin Scheibler
 
     Permission is hereby granted, free of charge, to any person obtaining a copy of
     this software and associated documentation files (the "Software"), to deal in
