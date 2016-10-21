@@ -1,3 +1,3 @@
 
-from .mklfft import *
+from .mkl_fft import *
 
