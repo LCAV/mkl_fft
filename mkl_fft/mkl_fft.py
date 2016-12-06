@@ -33,7 +33,7 @@ def load_libmkl():
 
     else:
         try:
-            return _ctypes.cdll.LoadLibrary("mk2_rt.dll")
+            return _ctypes.cdll.LoadLibrary("mkl_rt.dll")
         except:
             raise ValueError('MKL Library not found')
 
