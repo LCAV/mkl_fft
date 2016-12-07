@@ -3,6 +3,7 @@ Wrapper for the MKL FFT routines. This implements very fast FFT on Intel
 processors, much faster than the stock fftpack routines in numpy/scipy.
 
 """
+from __future__ import division, print_function
 
 import numpy as np
 import ctypes as _ctypes
@@ -120,8 +121,8 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scram
     length = _ctypes.c_int(n)
     n_transforms = _ctypes.c_int(np.prod(a.shape) // a.shape[axis])
 
-    # For strides, the C type used *must* be int64
-    strides = (_ctypes.c_int64*2)(0, a.strides[axis] // a.itemsize)
+    # For strides, the C type used *must* be long
+    strides = (_ctypes.c_long*2)(0, a.strides[axis] // a.itemsize)
     if a.ndim == 2:
         if axis == 0:
             distance = _ctypes.c_int(a.strides[1] // a.itemsize)
@@ -239,8 +240,8 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scramb
     length = _ctypes.c_int(a.shape[axis])
     n_transforms = _ctypes.c_int(np.prod(a.shape) // a.shape[axis])
     
-    # For strides, the C type used *must* be int64
-    strides = (_ctypes.c_int64*2)(0, a.strides[axis] // a.itemsize)
+    # For strides, the C type used *must* be long
+    strides = (_ctypes.c_long*2)(0, a.strides[axis] // a.itemsize)
     if a.ndim == 2:
         if axis == 0:
             distance = _ctypes.c_int(a.strides[1] // a.itemsize)
@@ -340,7 +341,7 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
     # Create the description handle
     Desc_Handle = _ctypes.c_void_p(0)
-    dims = (_ctypes.c_int64*2)(*a.shape)
+    dims = (_ctypes.c_long*2)(*a.shape)
    
     if a.dtype == np.complex64:
         mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_SINGLE, DFTI_COMPLEX, _ctypes.c_int(2), dims)
@@ -350,25 +351,22 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
 
     # Set normalization factor
     if norm == 'ortho':
-        if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1.0 / np.sqrt(np.prod(a.shape)))
-        else:
-            scale = _ctypes.c_double(1.0 / np.sqrt(np.prod(a.shape)))
-        
+        scale = _ctypes.c_double(1.0 / np.sqrt(np.prod(a.shape)))
         mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, scale)
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+
     elif norm is None:
-        if a.dtype == np.complex64:
-            scale = _ctypes.c_float(1.0 / np.prod(a.shape))
-        else:
-            scale = _ctypes.c_double(1.0 / np.prod(a.shape))
-        
+        scale = _ctypes.c_double(1.0 / np.prod(a.shape))
+        mkl.DftiSetValue(Desc_Handle, DFTI_FORWARD_SCALE, _ctypes.c_double(1.0))
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
+
+        scale = _ctypes.c_float(0.)
+        mkl.DftiGetValue(Desc_Handle, DFTI_BACKWARD_SCALE, _ctypes.byref(scale))
 
 
     # Set input strides if necessary
     if not a.flags['C_CONTIGUOUS']:
-        in_strides = (_ctypes.c_int*3)(0, a.strides[0] // a.itemsize, a.strides[1] // a.itemsize)
+        in_strides = (_ctypes.c_long*3)(0, a.strides[0] // a.itemsize, a.strides[1] // a.itemsize)
         mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(in_strides))
 
     if direction == 'forward':
@@ -383,14 +381,13 @@ def mkl_fft2(a, norm=None, direction='forward', out=None):
         mkl.DftiCommitDescriptor(Desc_Handle)
         fft_func(Desc_Handle, a.ctypes.data_as(_ctypes.c_void_p) )
 
-
     else:
         # Not-in-place FFT
         mkl.DftiSetValue(Desc_Handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE)
 
         # Set output strides if necessary
         if not out.flags['C_CONTIGUOUS']:
-            out_strides = (_ctypes.c_int*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
+            out_strides = (_ctypes.c_long*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
             mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
 
         mkl.DftiCommitDescriptor(Desc_Handle)
@@ -447,7 +444,7 @@ def mkl_rfft2(a, norm=None, direction='forward', out=None):
 
     # Create the description handle
     Desc_Handle = _ctypes.c_void_p(0)
-    dims = (_ctypes.c_int64*2)(*a.shape)
+    dims = (_ctypes.c_long*2)(*a.shape)
    
     if a.dtype == np.float32:
         mkl.DftiCreateDescriptor(_ctypes.byref(Desc_Handle), DFTI_SINGLE, DFTI_REAL, _ctypes.c_int(2), dims)
@@ -474,9 +471,9 @@ def mkl_rfft2(a, norm=None, direction='forward', out=None):
         
         mkl.DftiSetValue(Desc_Handle, DFTI_BACKWARD_SCALE, scale)
     
-    # For strides, the C type used *must* be int64
-    in_strides = (_ctypes.c_int64*3)(0, a.strides[0] // a.itemsize, a.strides[1] // a.itemsize)
-    out_strides = (_ctypes.c_int64*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
+    # For strides, the C type used *must* be long
+    in_strides = (_ctypes.c_long*3)(0, a.strides[0] // a.itemsize, a.strides[1] // a.itemsize)
+    out_strides = (_ctypes.c_long*3)(0, out.strides[0] // out.itemsize, out.strides[1] // out.itemsize)
     
     # mkl.DftiSetValue(Desc_Handle, DFTI_INPUT_STRIDES, _ctypes.byref(in_strides))
     mkl.DftiSetValue(Desc_Handle, DFTI_OUTPUT_STRIDES, _ctypes.byref(out_strides))
