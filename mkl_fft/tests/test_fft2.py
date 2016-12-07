@@ -28,7 +28,6 @@ class TestMKLFFT2(TestCase):
                             for i in range(n_tests):
 
                                 dims = np.random.randint(1,high=d_max+1,size=(ndim))
-                                dims = [8, 8]
 
                                 xr = np.array(np.random.normal(size=dims), dtype=dtype)
                                 xi = np.array(np.random.normal(size=dims), dtype=dtype)

@@ -61,10 +61,20 @@ def mkl_rfft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scram
     assert a.ndim < 3
     assert (axis < a.ndim and axis >= -1)
     assert (direction == 'forward' or direction == 'backward')
-    if direction == 'forward':
-        assert a.dtype == np.float32 or a.dtype == np.float64
-    else:
-        assert a.dtype == np.complex64 or a.dtype == np.complex128
+
+    # Convert input to complex data type if real (also memory copy)
+    if direction == 'forward' and a.dtype != np.float32 and a.dtype != np.float64:
+        if a.dtype == np.int64 or a.dtype == np.uint64:
+            a = np.array(a, dtype=np.float64)
+        else:
+            a = np.array(a, dtype=np.float32)
+
+    elif direction == 'backward' and a.dtype != np.complex128 and a.dtype != np.complex64:
+        if a.dtype == np.int64 or a.dtype == np.uint64 or a.dtype == np.float64:
+            a = np.array(a, dtype=np.complex128)
+        else:
+            a = np.array(a, dtype=np.complex64)
+
 
     order = 'C'
     if a.flags['F_CONTIGUOUS'] and not a.flags['C_CONTIGUOUS']:
