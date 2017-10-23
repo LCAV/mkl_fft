@@ -212,21 +212,23 @@ def mkl_fft(a, n=None, axis=-1, norm=None, direction='forward', out=None, scramb
     assert axis < a.ndim and axis >= -1
 
     # Add zero padding if needed (incurs memory copy)
+    '''
     if n is not None and n != a.shape[axis]:
         pad_width = np.zeros((a.ndim, 2), dtype=np.int)
         pad_width[axis,1] = n - a.shape[axis]
         a = np.pad(a, pad_width, mode='constant')
+    '''
 
     if n is not None:
         if a.shape[axis] < n:
             # pad axis with zeros
-            pad_width = np.zeros((a.ndim, 2))
-            pad_width[axis,1] = m - a.shape[axis]
-            a = np.pad(x, pad_width, mode='constant')
+            pad_width = np.zeros((a.ndim, 2), dtype=np.int)
+            pad_width[axis,1] = n - a.shape[axis]
+            a = np.pad(a, pad_width, mode='constant')
         elif a.shape[axis] > n:
             # truncate along axis
-            b = np.swapaxes(a, axis, 0)[:m,]
-            a = np.swapaxes(b, 0, axis).copy()
+            b = np.swapaxes(a, axis, -1)[...,:n]
+            a = np.swapaxes(b, -1, axis).copy()
 
     # Convert input to complex data type if real (also memory copy)
     if a.dtype != np.complex128 and a.dtype != np.complex64:
