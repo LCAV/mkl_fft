@@ -1,5 +1,7 @@
 # mklfft
 
+__This package has been obsoleted by the development of a proper wrapper around MKL FFT directly by the good people of Intel. Please use [their package](https://github.com/IntelPython/mkl_fft) instead.__
+
 This is a wrapper around the Intel Math Kernel Library FFT. It is very fast.
 
 ### Authors
